@@ -1,0 +1,15 @@
+{{define "page"}}
+<div id="app">
+	<form method="POST">
+		<template v-if="hyperlink">
+			<label for="secretMessage" class="bold">Message:</label>
+			<textarea class="form-control" rows="5" name="secretMessage">${hyperlink}</textarea>
+		</template>
+		<template v-else>
+			<button v-on:click="getHyperlink" class="btn btn-primary center-block">Show</button>
+		</template>
+	</form>
+
+	<script src="/static/view.js"></script>
+<div>
+{{end}}

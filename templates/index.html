@@ -1,0 +1,39 @@
+{{define "page"}}
+<div id="app">
+	<form method="POST">
+		<div class="form-group">
+			<label for="secretMessage">Enter a secret message</label>
+			<textarea class="form-control" id="secretMessage" rows="3"></textarea>
+		</div>
+
+		<div class="form-group">
+			<label for="secretFile">Or upload a secret file</label>
+			<input type="file" class="form-control-file" id="secretFile">
+		</div>
+
+		<div class="form-group">
+			<label for="maxViews">Max views (0 unlimited)</label>
+			<input type="text" class="form-control" id="maxViews" value="1">
+		</div>
+			
+		<div class="form-group">
+			<label for="expireIn">Expire in (minimum 5m)</label>
+			<input type="text" class="form-control" id="expireIn" value="24h">
+		</div>
+
+		<div class="form-group">
+			<button v-on:click="getHyperlink" class="btn btn-primary">Generate Hyperlink</button>
+		</div>
+	</form>
+
+	<div v-if="hyperlink">
+		<a v-bind:href="hyperlink">${hyperlink}</a>
+	</div>
+
+	<div v-if="err">
+		<p>${err}</p>
+	</div>
+
+	<script src="/static/index.js"></script>
+</div>
+{{end}}

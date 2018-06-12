@@ -27,8 +27,8 @@ func (c *Config) RegisterFlags(f *flag.FlagSet) {
 	f.StringVar(&c.Host, "host", "", "Host IP to listen on")
 	f.DurationVar(&c.HTTPReadTimeout, "http.read-timeout", 5*time.Second, "HTTP server read timeout")
 	f.DurationVar(&c.HTTPWriteTimeout, "http.write-timeout", 10*time.Second, "HTTP server write timeout")
-	f.StringVar(&c.HTTPStaticPath, "http.static-path", "", "Path from where to service static files (/static/*)")
-	f.StringVar(&c.HTTPTemplatePath, "http.template-path", "", "Path from where to service HTTP templates")
+	f.StringVar(&c.HTTPStaticPath, "http.static-path", "./static", "Path from where to service static files (/static/*)")
+	f.StringVar(&c.HTTPTemplatePath, "http.template-path", "./templates", "Path from where to service HTTP templates")
 	f.StringVar(&c.LogLevel, "loglevel", "info", "Set log level (debug, info, error)")
 }
 
