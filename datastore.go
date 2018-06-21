@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -22,38 +23,51 @@ func NewDatastoreKey() string {
 	return string(b)
 }
 
-type HyperLink struct {
-	Message  string        `json:"secretMessage,omitempty"`
-	File     []byte        `json:"secretFile,omitempty"`
+type HyperlinkFileDesc struct {
+	Data        []byte
+	ContentType string
+	Filename    string
+}
+
+type Hyperlink struct {
+	Message  string        `json:"message,omitempty"`
 	MaxViews int           `json:"maxViews,omitempty"`
 	Views    int           `json:"views,omitempty"`
 	ExpireIn time.Duration `json:"expireIn,omitempty"`
 	Created  time.Time
+	Type     string
+	File     HyperlinkFileDesc
 }
 
-// Clone creates a new instance of HyperLink with the same values
-func (h *HyperLink) Clone() HyperLink {
-	return HyperLink{
+// Clone creates a new instance of Hyperlink with the same values
+func (h *Hyperlink) Clone() Hyperlink {
+	return Hyperlink{
 		Message:  h.Message,
-		File:     h.File,
 		MaxViews: h.MaxViews,
+		Views:    h.Views,
 		ExpireIn: h.ExpireIn,
 		Created:  h.Created,
+		Type:     h.Type,
+		File: HyperlinkFileDesc{
+			Data:        h.File.Data,
+			ContentType: h.File.ContentType,
+			Filename:    h.File.Filename,
+		},
 	}
 }
 
 type Datastore struct {
-	data map[string]*HyperLink
+	data map[string]*Hyperlink
 	mtx  sync.RWMutex
 }
 
 func NewDatastore(cfg Config) *Datastore {
 	return &Datastore{
-		data: map[string]*HyperLink{},
+		data: map[string]*Hyperlink{},
 	}
 }
 
-func (d *Datastore) Add(hyperlink *HyperLink) string {
+func (d *Datastore) Add(hyperlink *Hyperlink) string {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -70,7 +84,7 @@ func (d *Datastore) Add(hyperlink *HyperLink) string {
 	return key
 }
 
-func (d *Datastore) Get(key string) (*HyperLink, error) {
+func (d *Datastore) Get(key string) (*Hyperlink, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -82,5 +96,16 @@ func (d *Datastore) Get(key string) (*HyperLink, error) {
 		return hyperlink, nil
 	}
 
-	return &HyperLink{}, nil
+	return &Hyperlink{}, fmt.Errorf("%s was not found", key)
+}
+
+func (d *Datastore) Info(key string) (string, string, error) {
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	if hyperlink, ok := d.data[key]; ok {
+		return hyperlink.Type, hyperlink.File.Filename, nil
+	}
+
+	return "", "", fmt.Errorf("%s was not found", key)
 }

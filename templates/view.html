@@ -2,14 +2,25 @@
 <div id="app">
 	<form method="POST">
 		<template v-if="hyperlink">
-			<label for="secretMessage" class="bold">Message:</label>
-			<textarea class="form-control" rows="5" name="secretMessage">${hyperlink}</textarea>
+			<label for="message" class="bold">Message:</label>
+			<textarea class="form-control" rows="5" name="message">${hyperlink.message}</textarea>
+			<p>Views left: ${viewsLeft}</p>
+			<p v-if="expireIn">Expires in: ${expireIn}</p>
+		</template>
+		<template v-else-if="error">
+			<p class="text-center">The key does not exist or has expired.</p>
 		</template>
 		<template v-else>
+			{{ if eq .type "file" }}
+			<div class="text-center">
+				<a href="{{ .link }}" class="btn btn-primary">Download</a>
+			</div>
+			{{ else }}
 			<button v-on:click="getHyperlink" class="btn btn-primary center-block">Show</button>
+			{{ end }}
 		</template>
 	</form>
 
 	<script src="/static/view.js"></script>
-<div>
+</div>
 {{end}}

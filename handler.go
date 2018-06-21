@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 )
 
 // Handler hols the http handler, and the routes etc
@@ -37,12 +40,14 @@ func NewHandler(cfg Config) *Handler {
 func (h *Handler) RegisterRoutes() {
 	h.router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(h.staticPath))))
 
-	h.router.HandleFunc("/{key}", h.handleView())
-	h.router.HandleFunc("/", h.handleIndex())
-
 	api := h.router.PathPrefix("/api/").Subrouter()
 	api.HandleFunc("/", h.handleAddHyperlink()).Methods("POST")
 	api.HandleFunc("/{key}", h.handleGetHyperlink()).Methods("GET")
+
+	h.router.HandleFunc("/{key}/{filename}", h.handleDownload())
+	h.router.HandleFunc("/{key}", h.handleView())
+
+	h.router.HandleFunc("/", h.handleIndex())
 }
 
 func (h *Handler) handleIndex() http.HandlerFunc {
@@ -89,10 +94,42 @@ func (h *Handler) handleView() http.HandlerFunc {
 		v := mux.Vars(r)
 		vars := map[string]interface{}{}
 		if key, ok := v["key"]; ok {
+			t, f, err := h.db.Info(key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				log.Error(err)
+				return
+			}
+
 			vars["key"] = key
+			vars["type"] = t
+			vars["link"] = fmt.Sprintf("/%s/%s", key, f)
 		}
 
 		tmpl.Execute(w, vars)
+	}
+}
+
+func (h *Handler) handleDownload() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		v := mux.Vars(r)
+		if key, ok := v["key"]; ok {
+			hyperlink, err := h.db.Get(key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", hyperlink.File.ContentType)
+			_, err = w.Write(hyperlink.File.Data)
+			if err != nil {
+				log.Error(err)
+			}
+		} else {
+			http.Error(w, "No key provided", http.StatusNotFound)
+			return
+		}
 	}
 }
 
@@ -110,11 +147,38 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 			return
 		}
 
-		key := h.db.Add(&HyperLink{
-			Message:  r.FormValue("secretMessage"),
+		/* if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+			renderError(w, "FILE_TOO_BIG", http.StatusBadRequest)
+			return
+		} */
+		hyperlink := &Hyperlink{
 			MaxViews: maxViews,
 			ExpireIn: expireIn,
-		})
+		}
+
+		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+			hyperlink.Message = r.FormValue("data")
+			hyperlink.Type = "message"
+		} else if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			file, hdr, err := r.FormFile("data")
+			if err != nil {
+				http.Error(w, "Failed to read file from request", http.StatusBadRequest)
+				return
+			}
+			defer file.Close()
+
+			var buf bytes.Buffer
+			io.Copy(&buf, file)
+			hyperlink.File.Data = buf.Bytes()
+			hyperlink.File.ContentType = hdr.Header.Get("Content-Type")
+			hyperlink.File.Filename = hdr.Filename
+			hyperlink.Type = "file"
+		} else {
+			http.Error(w, "Unsupported Content-Type", http.StatusBadRequest)
+			return
+		}
+
+		key := h.db.Add(hyperlink)
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, key)
@@ -124,7 +188,7 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		var hyperlink *HyperLink
+		var hyperlink *Hyperlink
 		var err error
 		if key, ok := vars["key"]; ok {
 			hyperlink, err = h.db.Get(key)
@@ -139,7 +203,7 @@ func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 
 		// Create a copy in order to change ExpireIn without changing the stored data
 		clone := hyperlink.Clone()
-		clone.ExpireIn = time.Now().UTC().Sub(clone.Created.Add(clone.ExpireIn)).Truncate(time.Second)
+		clone.ExpireIn = clone.Created.Add(clone.ExpireIn).Sub(time.Now().UTC()).Truncate(time.Second)
 
 		buf := bytes.Buffer{}
 		err = json.NewEncoder(&buf).Encode(clone)
@@ -149,6 +213,7 @@ func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, buf.String())
 	}
 }

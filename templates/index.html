@@ -22,12 +22,12 @@
 		</div>
 
 		<div class="form-group">
-			<button v-on:click="getHyperlink" class="btn btn-primary">Generate Hyperlink</button>
+			<button v-on:click="getHyperlink" class="btn btn-primary" type="submit">Generate Hyperlink</button>
 		</div>
 	</form>
 
 	<div v-if="hyperlink">
-		<a v-bind:href="hyperlink">${hyperlink}</a>
+		<a v-bind:href="hyperlink" target="_blank">${hyperlink}</a>
 	</div>
 
 	<div v-if="err">
