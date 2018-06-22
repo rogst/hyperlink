@@ -4,12 +4,11 @@ var app = new Vue({
 	data: {
 		error: '',
 		hyperlink: '',
-		secretMessage: '',
 		viewsLeft: '',
 		expireIn: ''
 	},
 	methods: {
-		getHyperlink: function(event) {
+		showHyperlink: function(event) {
 			event.preventDefault();
 			var xhr = new XMLHttpRequest();
 			xhr.open('GET', '/api'+window.location.pathname, true);
@@ -24,7 +23,6 @@ var app = new Vue({
 						that.expireIn = seconds + 's';
 					}
 				} else {
-					console.log(this.responseText);
 					that.error = this.responseText;
 				}
 			}
@@ -33,21 +31,3 @@ var app = new Vue({
 		}
 	}
 })
-
-function converBase64toBlob(content) {
-	var sliceSize = 512;
-	var byteCharacters = window.atob(content); //method which converts base64 to binary
-	var byteArrays = [
-	];
-	for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-	  var slice = byteCharacters.slice(offset, offset + sliceSize);
-	  var byteNumbers = new Array(slice.length);
-	  for (var i = 0; i < slice.length; i++) {
-		byteNumbers[i] = slice.charCodeAt(i);
-	  }
-	  var byteArray = new Uint8Array(byteNumbers);
-	  byteArrays.push(byteArray);
-	}
-	var blob = new Blob(byteArrays, {}); //statement which creates the blob
-	return blob;
-  }

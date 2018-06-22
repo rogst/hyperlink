@@ -16,3 +16,7 @@ a,
 a:hover {
     text-decoration: none;
 }
+
+#secretFile {
+    display: inline-block;
+}

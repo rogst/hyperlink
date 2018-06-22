@@ -3,7 +3,8 @@ var app = new Vue({
 	el: '#app',
 	data: {
 		hyperlink: '',
-		err: ''
+		err: '',
+		showClearFileBtn: false
 	},
 	methods: {
 		getHyperlink: function(event) {
@@ -35,6 +36,25 @@ var app = new Vue({
 				params += "&expireIn=" + document.getElementById("expireIn").value;
 				xhr.send(params);
 			}
+		},
+		messageUpdate: function (event) {
+			if (document.getElementById("secretMessage").value.length > 0) {
+				document.getElementById("secretFile").disabled = true;
+			} else {
+				document.getElementById("secretFile").disabled = false;
+			}
+		},
+		fileUpdate: function (event) {
+			if (document.getElementById("secretFile").files.length > 0) {
+				document.getElementById("secretMessage").disabled = true;
+				this.showClearFileBtn = true;
+			} else {
+				document.getElementById("secretMessage").disabled = false;
+				this.showClearFileBtn = false;
+			}
+		},
+		clearFile: function(event) {
+			document.getElementById("secretFile").value = null;
 		}
 	}
 })
