@@ -90,7 +90,10 @@ func (d *Datastore) Get(key string) (*Hyperlink, error) {
 
 	if hyperlink, ok := d.data[key]; ok {
 		hyperlink.Views++
-		if hyperlink.Views >= hyperlink.MaxViews {
+		if hyperlink.MaxViews > 0 && hyperlink.Views >= hyperlink.MaxViews {
+			delete(d.data, key)
+		}
+		if hyperlink.Created.Add(hyperlink.ExpireIn).Sub(time.Now().UTC()) < 0 {
 			delete(d.data, key)
 		}
 		return hyperlink, nil

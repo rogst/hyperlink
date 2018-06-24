@@ -19,8 +19,7 @@ var app = new Vue({
 					that.hyperlink = JSON.parse(this.responseText);
 					that.viewsLeft = that.hyperlink.maxViews - that.hyperlink.views;
 					if (that.viewsLeft > 0) {
-						var seconds = that.hyperlink.expireIn / 1000000000;
-						that.expireIn = seconds + 's';
+						that.expireIn = secsToDuration(that.hyperlink.expireIn / 1000000000);
 					}
 				} else {
 					that.error = this.responseText;
@@ -31,3 +30,27 @@ var app = new Vue({
 		}
 	}
 })
+
+function secsToDuration(seconds) {
+	dur = ""
+	if (seconds >= (60 * 60 * 24)) {
+		days = Math.trunc(seconds / (60 * 60 * 24))
+		dur += days + "d ";
+		seconds -= (days * 60 * 60 * 24)
+	}
+	if (seconds >= (60 * 60)) {
+		hours = Math.trunc(seconds / (60 * 60))
+		dur += hours + "h "
+		seconds -= (hours * 60 * 60)
+	}
+	if (seconds >= 60) {
+		mins = Math.trunc(seconds / 60)
+		dur += mins + "m "
+		seconds -= (mins * 60)
+	}
+	secs = seconds % 60
+	if (secs > 0) {
+		dur += secs + "s"
+	}
+	return dur.trim()
+}
