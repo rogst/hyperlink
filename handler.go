@@ -44,7 +44,8 @@ func (h *Handler) RegisterRoutes() {
 	api.HandleFunc("/", h.handleAddHyperlink()).Methods("POST")
 	api.HandleFunc("/{key}", h.handleGetHyperlink()).Methods("GET")
 
-	h.router.HandleFunc("/{key}/{filename}", h.handleDownload())
+	h.router.HandleFunc("/{key}/download/{filename}", h.handleDownload())
+	h.router.HandleFunc("/{key}/logs", h.handleLogs())
 	h.router.HandleFunc("/{key}", h.handleView())
 
 	h.router.HandleFunc("/", h.handleIndex())
@@ -94,7 +95,7 @@ func (h *Handler) handleView() http.HandlerFunc {
 		v := mux.Vars(r)
 		vars := map[string]interface{}{}
 		if key, ok := v["key"]; ok {
-			t, f, err := h.db.Info(key)
+			meta, err := h.db.Info(key)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				log.Error(err)
@@ -102,8 +103,48 @@ func (h *Handler) handleView() http.HandlerFunc {
 			}
 
 			vars["key"] = key
-			vars["type"] = t
-			vars["link"] = fmt.Sprintf("/%s/%s", key, f)
+			vars["type"] = meta.Type
+			vars["link"] = fmt.Sprintf("/%s/%s", key, meta.Filename)
+		}
+
+		tmpl.Execute(w, vars)
+	}
+}
+
+func (h *Handler) handleLogs() http.HandlerFunc {
+	var (
+		init sync.Once
+		tmpl *template.Template
+		err  error
+	)
+	return func(w http.ResponseWriter, r *http.Request) {
+		init.Do(func() {
+			masterFile := filepath.Join(h.templatePath, "master.html")
+			viewFile := filepath.Join(h.templatePath, "logs.html")
+			tmpl, err = template.New("master").ParseFiles(masterFile, viewFile)
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		v := mux.Vars(r)
+		vars := map[string]interface{}{}
+		if key, ok := v["key"]; ok {
+			logs, err := h.db.Logs(key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				log.Error(err)
+				return
+			}
+			var hasExpired bool
+			meta, err := h.db.Info(key)
+			if err != nil {
+				hasExpired = true
+			}
+
+			vars["hasExpired"] = hasExpired
+			vars["meta"] = meta
+			vars["logs"] = logs
 		}
 
 		tmpl.Execute(w, vars)
@@ -114,15 +155,15 @@ func (h *Handler) handleDownload() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v := mux.Vars(r)
 		if key, ok := v["key"]; ok {
-			hyperlink, err := h.db.Get(key)
+			hyperlink, err := h.db.Get(key, getClientInfo(r))
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
 
 			w.WriteHeader(http.StatusOK)
-			w.Header().Set("Content-Type", hyperlink.File.ContentType)
-			_, err = w.Write(hyperlink.File.Data)
+			w.Header().Set("Content-Type", hyperlink.Meta.ContentType)
+			_, err = w.Write(hyperlink.Data)
 			if err != nil {
 				log.Error(err)
 			}
@@ -152,13 +193,15 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 			return
 		} */
 		hyperlink := &Hyperlink{
-			MaxViews: maxViews,
-			ExpireIn: expireIn,
+			Meta: HyperlinkMetadata{
+				MaxViews: maxViews,
+				ExpireIn: expireIn,
+			},
 		}
 
 		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
-			hyperlink.Message = r.FormValue("data")
-			hyperlink.Type = "message"
+			hyperlink.Data = []byte(r.FormValue("data"))
+			hyperlink.Meta.Type = "message"
 		} else if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 			file, hdr, err := r.FormFile("data")
 			if err != nil {
@@ -169,16 +212,16 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 
 			var buf bytes.Buffer
 			io.Copy(&buf, file)
-			hyperlink.File.Data = buf.Bytes()
-			hyperlink.File.ContentType = hdr.Header.Get("Content-Type")
-			hyperlink.File.Filename = hdr.Filename
-			hyperlink.Type = "file"
+			hyperlink.Data = buf.Bytes()
+			hyperlink.Meta.ContentType = hdr.Header.Get("Content-Type")
+			hyperlink.Meta.Filename = hdr.Filename
+			hyperlink.Meta.Type = "file"
 		} else {
 			http.Error(w, "Unsupported Content-Type", http.StatusBadRequest)
 			return
 		}
 
-		key := h.db.Add(hyperlink)
+		key := h.db.Add(hyperlink, getClientIP(r))
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, key)
@@ -186,12 +229,18 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 }
 
 func (h *Handler) handleGetHyperlink() http.HandlerFunc {
+	type Response struct {
+		Data     string        `json:"data,omitempty"`
+		ExpireIn time.Duration `json:"expireIn,omitempty"`
+		MaxViews int           `json:"maxViews,omitempty"`
+		Views    int           `json:"views,omitempty"`
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		var hyperlink *Hyperlink
 		var err error
 		if key, ok := vars["key"]; ok {
-			hyperlink, err = h.db.Get(key)
+			hyperlink, err = h.db.Get(key, getClientInfo(r))
 			if err != nil {
 				http.Error(w, "Provided key was not found", http.StatusNotFound)
 				return
@@ -202,11 +251,15 @@ func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 		}
 
 		// Create a copy in order to change ExpireIn without changing the stored data
-		clone := hyperlink.Clone()
-		clone.ExpireIn = clone.Created.Add(clone.ExpireIn).Sub(time.Now().UTC()).Truncate(time.Second)
+		resp := Response{
+			Data:     string(hyperlink.Data),
+			ExpireIn: hyperlink.Meta.Created.Add(hyperlink.Meta.ExpireIn).Sub(time.Now().UTC()).Truncate(time.Second),
+			MaxViews: hyperlink.Meta.MaxViews,
+			Views:    hyperlink.Meta.Views,
+		}
 
 		buf := bytes.Buffer{}
-		err = json.NewEncoder(&buf).Encode(clone)
+		err = json.NewEncoder(&buf).Encode(resp)
 		if err != nil {
 			http.Error(w, "JSON encoding error", http.StatusInternalServerError)
 			return
@@ -216,4 +269,28 @@ func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, buf.String())
 	}
+}
+
+type ClientInfo struct {
+	IP        string
+	UserAgent string
+}
+
+func getClientInfo(r *http.Request) ClientInfo {
+	return ClientInfo{
+		IP:        getClientIP(r),
+		UserAgent: r.Header.Get("User-Agent"),
+	}
+}
+
+func getClientIP(r *http.Request) string {
+	clientIP := r.Header.Get("x-real-ip")
+	if clientIP == "" {
+		clientIP = r.Header.Get("x-forwarded-for")
+	}
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+
+	return clientIP
 }

@@ -23,51 +23,55 @@ func NewDatastoreKey() string {
 	return string(b)
 }
 
-type HyperlinkFileDesc struct {
-	Data        []byte
-	ContentType string
-	Filename    string
+type HyperlinkMetadata struct {
+	MaxViews    int           `json:"maxViews,omitempty"`
+	Views       int           `json:"views,omitempty"`
+	ExpireIn    time.Duration `json:"expireIn,omitempty"`
+	Created     time.Time     `json:"created,omitempty"`
+	Type        string        `json:"type,omitempty"`
+	ContentType string        `json:"contenttype,omitempty"`
+	Filename    string        `json:"filename,omitempty"`
 }
 
 type Hyperlink struct {
-	Message  string        `json:"message,omitempty"`
-	MaxViews int           `json:"maxViews,omitempty"`
-	Views    int           `json:"views,omitempty"`
-	ExpireIn time.Duration `json:"expireIn,omitempty"`
-	Created  time.Time
-	Type     string
-	File     HyperlinkFileDesc
+	Data []byte            `json:"data,omitempty"`
+	Meta HyperlinkMetadata `json:"meta,omitempty"`
 }
 
-// Clone creates a new instance of Hyperlink with the same values
-func (h *Hyperlink) Clone() Hyperlink {
-	return Hyperlink{
-		Message:  h.Message,
-		MaxViews: h.MaxViews,
-		Views:    h.Views,
-		ExpireIn: h.ExpireIn,
-		Created:  h.Created,
-		Type:     h.Type,
-		File: HyperlinkFileDesc{
-			Data:        h.File.Data,
-			ContentType: h.File.ContentType,
-			Filename:    h.File.Filename,
-		},
-	}
+type HyperLog struct {
+	CreatedBy string
+	Created   time.Time
+	Entries   []HyperLogEntry `json:"entries"`
+}
+
+type HyperLogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	IP        string    `json:"ip"`
+	UserAgent string    `json:"useragent"`
+}
+
+func (h *HyperLog) Add(c ClientInfo) {
+	h.Entries = append(h.Entries, HyperLogEntry{
+		Timestamp: time.Now().UTC(),
+		IP:        c.IP,
+		UserAgent: c.UserAgent,
+	})
 }
 
 type Datastore struct {
 	data map[string]*Hyperlink
+	logs map[string]*HyperLog
 	mtx  sync.RWMutex
 }
 
 func NewDatastore(cfg Config) *Datastore {
 	return &Datastore{
 		data: map[string]*Hyperlink{},
+		logs: map[string]*HyperLog{},
 	}
 }
 
-func (d *Datastore) Add(hyperlink *Hyperlink) string {
+func (d *Datastore) Add(hyperlink *Hyperlink, creator string) string {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -79,21 +83,29 @@ func (d *Datastore) Add(hyperlink *Hyperlink) string {
 		}
 	}
 
-	hyperlink.Created = time.Now().UTC()
+	hyperlink.Meta.Created = time.Now().UTC()
+	hyperLog := &HyperLog{
+		CreatedBy: creator,
+		Created:   hyperlink.Meta.Created,
+	}
+
 	d.data[key] = hyperlink
+	d.logs[key] = hyperLog
+
 	return key
 }
 
-func (d *Datastore) Get(key string) (*Hyperlink, error) {
+func (d *Datastore) Get(key string, c ClientInfo) (*Hyperlink, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
 	if hyperlink, ok := d.data[key]; ok {
-		hyperlink.Views++
-		if hyperlink.MaxViews > 0 && hyperlink.Views >= hyperlink.MaxViews {
+		d.logs[key].Add(c)
+		hyperlink.Meta.Views++
+		if hyperlink.Meta.MaxViews > 0 && hyperlink.Meta.Views >= hyperlink.Meta.MaxViews {
 			delete(d.data, key)
 		}
-		if hyperlink.Created.Add(hyperlink.ExpireIn).Sub(time.Now().UTC()) < 0 {
+		if hyperlink.Meta.Created.Add(hyperlink.Meta.ExpireIn).Sub(time.Now().UTC()) < 0 {
 			delete(d.data, key)
 		}
 		return hyperlink, nil
@@ -102,13 +114,24 @@ func (d *Datastore) Get(key string) (*Hyperlink, error) {
 	return &Hyperlink{}, fmt.Errorf("%s was not found", key)
 }
 
-func (d *Datastore) Info(key string) (string, string, error) {
+func (d *Datastore) Info(key string) (HyperlinkMetadata, error) {
 	d.mtx.RLock()
 	defer d.mtx.RUnlock()
 
 	if hyperlink, ok := d.data[key]; ok {
-		return hyperlink.Type, hyperlink.File.Filename, nil
+		return hyperlink.Meta, nil
 	}
 
-	return "", "", fmt.Errorf("%s was not found", key)
+	return HyperlinkMetadata{}, fmt.Errorf("%s was not found", key)
+}
+
+func (d *Datastore) Logs(key string) ([]HyperLogEntry, error) {
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	if hyperlog, ok := d.logs[key]; ok {
+		return hyperlog.Entries, nil
+	}
+
+	return []HyperLogEntry(nil), fmt.Errorf("%s was not found", key)
 }

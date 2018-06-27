@@ -1,0 +1,14 @@
+{{define "page"}}
+<div id="app">
+	{{ if .hasExpired }}
+	<p>This hyperlink has expired</p>
+	{{ else }}
+	<p>Views: {{ .meta.Views }}/{{ .meta.MaxViews }}</p>
+	{{ end }}
+	<ul>
+	{{ range .logs }}
+		<li>{{ .Timestamp }} {{ .IP }} {{ .UserAgent }}</li>
+	{{ end}}
+	</ul>
+</div>
+{{end}}
