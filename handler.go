@@ -95,16 +95,16 @@ func (h *Handler) handleView() http.HandlerFunc {
 		v := mux.Vars(r)
 		vars := map[string]interface{}{}
 		if key, ok := v["key"]; ok {
-			meta, err := h.db.Info(key)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				log.Error(err)
-				return
+			if meta, err := h.db.Info(key); err == nil {
+				vars["key"] = key
+				vars["type"] = meta.Type
+				if meta.Type == MetaTypeFile {
+					vars["link"] = fmt.Sprintf("/%s/download/%s", key, meta.Filename)
+				}
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				vars["err"] = err.Error()
 			}
-
-			vars["key"] = key
-			vars["type"] = meta.Type
-			vars["link"] = fmt.Sprintf("/%s/%s", key, meta.Filename)
 		}
 
 		tmpl.Execute(w, vars)
@@ -201,7 +201,7 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 
 		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 			hyperlink.Data = []byte(r.FormValue("data"))
-			hyperlink.Meta.Type = "message"
+			hyperlink.Meta.Type = MetaTypeMessage
 		} else if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 			file, hdr, err := r.FormFile("data")
 			if err != nil {
@@ -215,7 +215,7 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 			hyperlink.Data = buf.Bytes()
 			hyperlink.Meta.ContentType = hdr.Header.Get("Content-Type")
 			hyperlink.Meta.Filename = hdr.Filename
-			hyperlink.Meta.Type = "file"
+			hyperlink.Meta.Type = MetaTypeFile
 		} else {
 			http.Error(w, "Unsupported Content-Type", http.StatusBadRequest)
 			return

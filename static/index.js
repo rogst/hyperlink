@@ -37,24 +37,29 @@ var app = new Vue({
 				xhr.send(params);
 			}
 		},
-		messageUpdate: function (event) {
-			if (document.getElementById("secretMessage").value.length > 0) {
-				document.getElementById("secretFile").disabled = true;
-			} else {
-				document.getElementById("secretFile").disabled = false;
-			}
-		},
 		fileUpdate: function (event) {
 			if (document.getElementById("secretFile").files.length > 0) {
-				document.getElementById("secretMessage").disabled = true;
 				this.showClearFileBtn = true;
 			} else {
-				document.getElementById("secretMessage").disabled = false;
 				this.showClearFileBtn = false;
 			}
 		},
 		clearFile: function(event) {
+			event.preventDefault();
 			document.getElementById("secretFile").value = null;
+			this.showClearFileBtn = false;
+		},
+		showEnterMessageView: function(event) {
+			event.preventDefault();
+			document.getElementById("selectFileView").style.display = "none";
+			document.getElementById("enterMessageView").style.display = "block";
+			document.getElementById("secretFile").value = null;
+		},
+		showSelectFileView: function(event) {
+			event.preventDefault();
+			document.getElementById("enterMessageView").style.display = "none";
+			document.getElementById("selectFileView").style.display = "block";
+			document.getElementById("secretMessage").value = null;
 		}
 	}
 })

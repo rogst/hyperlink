@@ -7,8 +7,12 @@ import (
 	"time"
 )
 
-const KeyLength = 10
-const KeyLetters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const (
+	KeyLength       = 10
+	KeyLetters      = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	MetaTypeMessage = "message"
+	MetaTypeFile    = "file"
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
