@@ -271,13 +271,9 @@ func (h *Handler) handleGetHyperlink() http.HandlerFunc {
 	}
 }
 
-type ClientInfo struct {
-	IP        string
-	UserAgent string
-}
-
-func getClientInfo(r *http.Request) ClientInfo {
-	return ClientInfo{
+func getClientInfo(r *http.Request) HyperlogEntry {
+	return HyperlogEntry{
+		Timestamp: time.Now().UTC(),
 		IP:        getClientIP(r),
 		UserAgent: r.Header.Get("User-Agent"),
 	}
