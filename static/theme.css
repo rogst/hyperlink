@@ -13,3 +13,7 @@ a:hover {
 #secretFile {
     display: inline-block;
 }
+
+@media (min-width: 450px) {
+    .container > .title {text-align: center;}
+}
