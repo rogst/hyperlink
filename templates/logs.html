@@ -1,14 +1,14 @@
 {{define "page"}}
 <div id="app">
-	{{ if .hasExpired }}
-	<p>This hyperlink has expired</p>
+	{{ if .err }}
+	<p style="text-align: center">The key does not exist or has expired.</p>
 	{{ else }}
-	<p>Views: {{ .meta.Views }}/{{ .meta.MaxViews }}</p>
-	{{ end }}
+	<h4>Activity log</h4>
 	<ul>
 	{{ range .logs }}
 		<li>{{ .Timestamp }} {{ .IP }} {{ .UserAgent }}</li>
 	{{ end}}
 	</ul>
+	{{ end }}
 </div>
 {{end}}

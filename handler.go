@@ -23,6 +23,8 @@ type Handler struct {
 	router       *mux.Router
 	staticPath   string
 	templatePath string
+	done         chan struct{}
+	stopped      chan struct{}
 }
 
 // NewHandler returns a new initiated Handler
@@ -33,6 +35,8 @@ func NewHandler(cfg Config) *Handler {
 		router:       router,
 		staticPath:   cfg.HTTPStaticPath,
 		templatePath: cfg.HTTPTemplatePath,
+		done:         make(chan struct{}),
+		stopped:      make(chan struct{}),
 	}
 }
 
@@ -130,21 +134,12 @@ func (h *Handler) handleLogs() http.HandlerFunc {
 		v := mux.Vars(r)
 		vars := map[string]interface{}{}
 		if key, ok := v["key"]; ok {
-			logs, err := h.db.Logs(key)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				log.Error(err)
-				return
+			if logs, err := h.db.Logs(key); err == nil {
+				vars["logs"] = logs
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				vars["err"] = err.Error()
 			}
-			var hasExpired bool
-			meta, err := h.db.Info(key)
-			if err != nil {
-				hasExpired = true
-			}
-
-			vars["hasExpired"] = hasExpired
-			vars["meta"] = meta
-			vars["logs"] = logs
 		}
 
 		tmpl.Execute(w, vars)
@@ -221,7 +216,7 @@ func (h *Handler) handleAddHyperlink() http.HandlerFunc {
 			return
 		}
 
-		key := h.db.Add(hyperlink, getClientIP(r))
+		key := h.db.Add(hyperlink, getClientInfo(r))
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, key)
@@ -289,4 +284,28 @@ func getClientIP(r *http.Request) string {
 	}
 
 	return clientIP
+}
+
+// RunCleaner runs a PurgeExpiredKeys at CleanInterval
+func (h *Handler) RunCleaner(interval time.Duration) {
+	defer close(h.stopped)
+
+	ticker := time.NewTicker(interval)
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := h.db.PurgeExpiredKeys(); err != nil {
+				log.Error(err)
+			}
+		case <-h.done:
+			break
+		}
+	}
+}
+
+// StopCleaner will cause RunCleaner to exit
+func (h *Handler) StopCleaner() {
+	close(h.done)
+	<-h.stopped
 }
