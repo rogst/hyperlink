@@ -25,6 +25,7 @@ type Config struct {
 	LogLevel         string
 	CleanInterval    time.Duration
 	ExpiredTTL       time.Duration
+	KeyLength        int
 }
 
 // RegisterFlags loads cmdline params into config
@@ -38,6 +39,7 @@ func (c *Config) RegisterFlags(f *flag.FlagSet) {
 	f.StringVar(&c.LogLevel, "loglevel", "info", "Set log level (debug, info, error)")
 	f.DurationVar(&c.CleanInterval, "clean.interval", 5*time.Minute, "How often to purge expired keys")
 	f.DurationVar(&c.ExpiredTTL, "expired.ttl", 24*time.Hour, "How long to keep expired keys")
+	f.IntVar(&c.KeyLength, "keylength", 16, "Length of the generated Hyperlink keys")
 }
 
 func main() {
@@ -72,7 +74,6 @@ func main() {
 
 	log.Println("Starting on", listenAddr)
 	log.Fatal(server.ListenAndServe())
-
 	log.Info("Hyperlink stopped")
 }
 

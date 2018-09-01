@@ -8,8 +8,6 @@ import (
 )
 
 const (
-	// KeyLength specifies the length of the random string for the hyperlink key
-	KeyLength = 10
 	// KeyLetters is the characters used to generate the hyperlink key
 	KeyLetters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	// MetaTypeMessage is used to identify message links
@@ -51,6 +49,22 @@ type Hyperlink struct {
 	Log  []HyperlogEntry   `json:"log,omitempty"`
 }
 
+func (h *Hyperlink) hasExpired() bool {
+	if h.Meta.Expired {
+		return true
+	}
+
+	if h.Meta.MaxViews > 0 && h.Meta.Views > h.Meta.MaxViews {
+		h.Meta.Expired = true
+	}
+
+	if h.Meta.Created.Add(h.Meta.ExpireIn).Sub(time.Now().UTC()) < 0 {
+		h.Meta.Expired = true
+	}
+
+	return h.Meta.Expired
+}
+
 // HyperlogEntry contains a timestamp and fields used to identify Hyperlink visitors
 type HyperlogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -65,16 +79,16 @@ func (h *Hyperlink) AddLog(entry HyperlogEntry) {
 
 // Datastore is the object that stores the data and logs for all hyperlinks
 type Datastore struct {
-	data       map[string]*Hyperlink
-	expiredTTL time.Duration
-	mtx        sync.RWMutex
+	config Config
+	data   map[string]*Hyperlink
+	mtx    sync.RWMutex
 }
 
 // NewDatastore returns a new initialized Datastore
 func NewDatastore(cfg Config) *Datastore {
 	return &Datastore{
-		data:       map[string]*Hyperlink{},
-		expiredTTL: cfg.ExpiredTTL,
+		data:   map[string]*Hyperlink{},
+		config: cfg,
 	}
 }
 
@@ -85,7 +99,7 @@ func (d *Datastore) Add(hyperlink *Hyperlink, entry HyperlogEntry) string {
 
 	var key string
 	for {
-		key = NewDatastoreKey(KeyLength)
+		key = NewDatastoreKey(d.config.KeyLength)
 		if _, exists := d.data[key]; !exists {
 			break
 		}
@@ -107,14 +121,8 @@ func (d *Datastore) Get(key string, entry HyperlogEntry) (*Hyperlink, error) {
 	if hyperlink, ok := d.data[key]; ok {
 		hyperlink.AddLog(entry)
 		hyperlink.Meta.Views++
-		if hyperlink.Meta.MaxViews > 0 && hyperlink.Meta.Views >= hyperlink.Meta.MaxViews {
+		if hyperlink.hasExpired() {
 			d.data[key].Data = nil
-			d.data[key].Meta.Expired = true
-			return &Hyperlink{}, fmt.Errorf("%s has expired", key)
-		}
-		if hyperlink.Meta.Created.Add(hyperlink.Meta.ExpireIn).Sub(time.Now().UTC()) < 0 {
-			d.data[key].Data = nil
-			d.data[key].Meta.Expired = true
 			return &Hyperlink{}, fmt.Errorf("%s has expired", key)
 		}
 
@@ -130,7 +138,7 @@ func (d *Datastore) Info(key string) (HyperlinkMetadata, error) {
 	defer d.mtx.RUnlock()
 
 	if hyperlink, ok := d.data[key]; ok {
-		if hyperlink.Meta.Expired {
+		if hyperlink.hasExpired() {
 			return HyperlinkMetadata{}, fmt.Errorf("%s has expired", key)
 		}
 
@@ -159,11 +167,10 @@ func (d *Datastore) PurgeExpiredKeys() error {
 
 	for x := range d.data {
 		expireIn := d.data[x].Meta.Created.Add(d.data[x].Meta.ExpireIn).Sub(time.Now().UTC())
-		if expireIn < -d.expiredTTL && d.data[x].Meta.Expired {
+		if expireIn < -d.config.ExpiredTTL && d.data[x].hasExpired() {
 			delete(d.data, x)
-		} else if expireIn < 0 && !d.data[x].Meta.Expired {
+		} else if expireIn < 0 && !d.data[x].hasExpired() {
 			d.data[x].Data = nil
-			d.data[x].Meta.Expired = true
 		}
 	}
 
