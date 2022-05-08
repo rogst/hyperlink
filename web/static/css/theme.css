@@ -1,0 +1,48 @@
+body {
+    background: #ffffff;
+    color: #000000;
+    margin: 0px;
+    padding: 0px;
+    padding-top: 1em;
+}
+
+a,
+a:hover {
+    text-decoration: none;
+}
+
+#secretFile {
+    display: inline-block;
+}
+
+@media (min-width: 450px) {
+    .container > .title {text-align: center;}
+}
+
+#appversion {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    font-size: 11px;
+    color: gray;
+}
+
+.errText {
+    text-align: center;
+    background: #ffffff;
+    color: red;
+}
+
+.copylink {
+    display: block;
+}
+.copylink a {
+    cursor: pointer;
+    color: black;
+    background: white;
+    font-size: small;
+}
+.copylink a:hover {
+    color: #0FA0CE;
+}

@@ -1,0 +1,31 @@
+{{define "page"}}
+<div id="app">
+	<form method="POST">
+		<div class="two columns">&nbsp;</div>
+		<div class="eight columns">
+			{{ if .err }}
+			<p class="errText">The link does not exist or has expired.</p>
+			{{ else }}
+			<template v-if="message">
+				<label for="message" class="bold">Message:</label>
+				<textarea class="u-full-width" rows="10" style="height: 100%" name="message">${message}</textarea>
+			</template>
+
+			<template v-else-if="error">
+				<p class="errText">The link does not exist or has expired.</p>
+			</template>
+
+			<template v-else>
+				<div class="row" style="text-align: center">
+					<button v-on:click="openMessage($event,'{{ .type }}','{{ .link }}')"
+						class="button-primary center-block">Show</button>
+				</div>
+			</template>
+			{{ end }}
+		</div>
+		<div class="two columns">&nbsp;</div>
+	</form>
+
+	<script src="/static/message.js"></script>
+</div>
+{{end}}

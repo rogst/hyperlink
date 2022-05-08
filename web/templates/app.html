@@ -1,0 +1,56 @@
+{{define "page"}}
+<div id="app">
+	<form method="POST">
+		<div class="two columns">&nbsp;</div>
+		<div class="eight columns">
+			<div class="row">
+				<div class="one-half column" style="margin-top: 0%">
+					<button id="showEnterMessageBtn" class="button u-full-width" v-on:click="showEnterMessageView">Send
+						a message</button>
+				</div>
+				<div class="one-half column" style="margin-top: 0%">
+					<button id="showSelectFileBtn" class="button u-full-width" v-on:click="showSelectFileView">Send a
+						file</button>
+				</div>
+			</div>
+
+			<div class="row">
+				<div id="enterMessageView">
+					<label for="secretMessage">Enter message</label>
+					<textarea class="u-full-width" id="secretMessage" rows="10" style="height: 100%"></textarea>
+				</div>
+
+				<div id="selectFileView" style="display: none">
+					<label for="secretFile">Select file</label>
+					<div>
+						<input type="file" class="u-full-width" id="secretFile" v-on:input="fileUpdate">
+						<button v-if="showClearFileBtn" v-on:click="clearFile">Clear</button>
+					</div>
+				</div>
+			</div>
+
+			<div class="row" style="text-align: center">
+				<button v-on:click="getHyperlink" class="button-primary" type="submit">Generate Hyperlink</button>
+			</div>
+
+			<div class="row" style="text-align: center">
+				<div v-if="hyperlink">
+					<a v-bind:href="hyperlink" target="_blank">${hyperlink}</a>
+					<div class="copylink">
+						<a v-on:click="updateClipboard">Copy link</a>
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div v-if="err">
+					<p class="errText">${err}</p>
+				</div>
+			</div>
+		</div>
+		<div class="two columns">&nbsp;</div>
+	</form>
+
+	<script src="/static/app.js"></script>
+</div>
+{{end}}
